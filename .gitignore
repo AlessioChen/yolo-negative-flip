@@ -1,5 +1,7 @@
-/data
+/datasets
 /models
+/training-yolo/runs
+/coco
 .ipynb_checkpoints
 .DS_STORE
 .env
