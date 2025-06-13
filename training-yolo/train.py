@@ -36,11 +36,11 @@ def train_yolo(dataset_yaml: str, experiment: Experiment, epochs: int = 10, batc
 
 
 def main():
-    epochs = 2
-    batch = 8
+    epochs = 10
+    batch = 16
 
-    half_dataset_yaml = 'coco_half.yaml'
-    full_dataset_yaml = 'coco_full.yaml'
+    half_dataset_yaml = 'coco_half.yml'
+    full_dataset_yaml = 'coco_full.yml'
 
     print("Training on half COCO dataset...")
     exp_half = Experiment(
