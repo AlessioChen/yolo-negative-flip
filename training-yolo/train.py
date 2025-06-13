@@ -21,7 +21,7 @@ def train_yolo(dataset_yaml: str, experiment: Experiment, epochs: int = 10, batc
         epochs=epochs,
         batch=batch,
         imgsz=640,
-        device="mps",  # change to 'cuda' if using GPU
+        device="cuda"
     )
 
     if save_path:
