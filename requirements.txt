@@ -1,2 +1,4 @@
 ultralytics
 pycocotools
+python-dotenv
+comet-ml
