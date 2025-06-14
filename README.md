@@ -53,6 +53,8 @@ Analysis on 36,335 COCO validation objects (IoU threshold: 0.5)
 ## 📊 Experiment 2: Training Data Scale Impact (Half COCO vs Full COCO)
 **Research Question:** How does training data size affect detection capabilities?
 
+Both models are trained from scratch using the same **YOLOv11n** architecture.
+
 ### Results Summary
 | Metric | Value | Interpretation |
 |------|-------|-------------|
