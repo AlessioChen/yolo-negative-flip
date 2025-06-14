@@ -57,15 +57,13 @@ def main():
     )
     experiment.set_name(experiment_name)
 
-    results = train_yolo(
+    train_yolo(
         dataset_yaml,
         experiment=experiment,
         epochs=args.epochs,
         batch=args.batch,
         save_path=save_path
     )
-
-    print(f"mAP@0.5 on {args.dataset} dataset:", results.metrics.get('mAP_0.5'))
 
 
 if __name__ == "__main__":
