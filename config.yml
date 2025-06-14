@@ -1,0 +1,14 @@
+models:
+  v1: "src/models/yolo11n_half.pt"
+  v2: "src/models/yolo11n_full.pt"
+
+dataset:
+  images_path: "datasets/images/val2017"
+  annotations_path: "datasets/annotations/instances_val2017.json"
+
+inference:
+  iou_threshold: 0.5
+
+output:
+  results_dir: "results"
+  results_file: "negative_flip_analysis_results.json" 

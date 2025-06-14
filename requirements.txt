@@ -2,3 +2,5 @@ ultralytics
 pycocotools
 python-dotenv
 comet-ml
+numpy
+pyyaml
