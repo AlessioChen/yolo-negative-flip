@@ -50,9 +50,7 @@ Analysis on 36,335 COCO validation objects (IoU threshold: 0.5)
 - Classification Negative Flips: 92
 
 
-📊 Experiment 2: Training Data Scale Impact (Half COCO vs Full COCO)
-
-# Negavative Flip Analysis: Train on Half COCO vs Train on Full COCO
+## 📊 Experiment 2: Training Data Scale Impact (Half COCO vs Full COCO)
 **Research Question:** How does training data size affect detection capabilities?
 
 ### Results Summary
