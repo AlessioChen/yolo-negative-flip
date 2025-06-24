@@ -55,7 +55,22 @@ Analysis on 36,335 COCO validation objects (IoU threshold: 0.5)
 
 Both models are trained from scratch using the same **YOLOv11n** architecture.
 
+### Training Curves 
+![Training curves](./plots/train_loss.png)
+
+### Validation Curves
+![Validation curves](./plots/validation_loss.png)
+
+
+
+### Standard metrics
+| Model     | mAp   | mAp50 | mAp75 | Precision  | Recall | F1 Score |
+|-----------|-------|-------|-------|------------|--------|----------|
+| Half COCO | 0.040 | 0.072 | 0.039 | 0.323      | 0.099  | 0.152    |
+| Full COCO | 0.174 | 0.266 | 0.187 | 0.396      | 0.272  | 0.323    |
+
 ### Results Summary
+
 | Metric | Value | Interpretation |
 |------|-------|-------------|
 | LNF Rate | 0.64% | Half-COCO model finds 233 objects Full-COCO model misses |
