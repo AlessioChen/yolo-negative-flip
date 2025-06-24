@@ -1,4 +1,4 @@
-path: ../datasets  # same as full dataset
+path: ../../datasets  # same as full dataset
 train: train2017_half.txt
 val: val2017_half.txt
 
