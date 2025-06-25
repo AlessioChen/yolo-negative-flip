@@ -104,17 +104,23 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
 
 
+    model_pretrained_path = config['models']['pretrained']
     model_v1_path = config['models']['v1']
     model_v2_path = config['models']['v2']
     
+    model_pretrained = YOLO(model_pretrained_path)
     model_v1 = YOLO(model_v1_path)
     model_v2 = YOLO(model_v2_path)
 
     coco_ann_path = config['dataset']['annotations_path']
     coco_val_path = config['dataset']['images_path']
 
+    preformance_pretrained = evaluate_model_performance(model_pretrained, coco_val_path, coco_ann_path)
     performance_v1 = evaluate_model_performance(model_v1, coco_val_path, coco_ann_path)
     performance_v2 = evaluate_model_performance(model_v2, coco_val_path, coco_ann_path)
+
+    print(preformance_pretrained)
+    print('----------------------')
 
     print(performance_v1)
 

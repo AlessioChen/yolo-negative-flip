@@ -66,6 +66,7 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 ### Standard metrics
 | Model     | mAp   | mAp50 | mAp75 | Precision  | Recall | 
 |-----------|-------|-------|-------|------------|--------|
+| YOLOv11n - Pre trained | 39.25% | 54.86% | 42.73% | 65.29%      | 50.43 
 | YOLOv11n - Half COCO | 4.00% | 7.02% | 3.91% | 32.33%      | 9.92%  
 | YOLOv11n - Full COCO | 17.42% | 26.59% | 18.73% | 39.63%     | 27.22%
 

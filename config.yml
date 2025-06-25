@@ -1,4 +1,5 @@
 models:
+  pretrained: "yolo11n.pt"
   v1: "src/models/yolo11n_half.pt"
   v2: "src/models/yolo11n_full.pt"
 
