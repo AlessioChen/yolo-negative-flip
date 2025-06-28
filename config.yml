@@ -1,7 +1,7 @@
 models:
   pretrained: "yolo11n.pt"
-  v1: "src/models/yolo11n_half.pt"
-  v2: "src/models/yolo11n_full.pt"
+  v1: "src/training-yolo/yolo11n_half.pt"
+  v2: "src/training-yolo/yolo11n_full.pt"
 
 dataset:
   images_path: "datasets/images/val2017"
@@ -12,4 +12,4 @@ inference:
 
 output:
   results_dir: "results"
-  results_file: "negative_flip_analysis_results.json" 
+  results_file: "negative_flip_analysis_results_half_vs_full.json" 

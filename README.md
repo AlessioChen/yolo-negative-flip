@@ -67,21 +67,21 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 | Model     | mAp   | mAp50 | mAp75 | Precision  | Recall | 
 |-----------|-------|-------|-------|------------|--------|
 | YOLOv11n - Pre trained | 39.25% | 54.86% | 42.73% | 65.29%      | 50.43 
-| YOLOv11n - Half COCO | 4.00% | 7.02% | 3.91% | 32.33%      | 9.92%  
-| YOLOv11n - Full COCO | 17.42% | 26.59% | 18.73% | 39.63%     | 27.22%
+| YOLOv11n - Half COCO | 31.20% | 44.71% | 33.80% | 56.66%      | 41.60%  
+| YOLOv11n - Full COCO | 34.99% | 49.41% |  38.09% | 60.35%     | 45.88%
 
 ### Results Summary
 
 | Metric | Value | Interpretation |
 |------|-------|-------------|
-| LNF Rate | 0.64% | Half-COCO model finds 233 objects Full-COCO model misses |
-| CNF Rate  | 0.81% | Full-COCO model's classification error rate|
-| TNF Rate | 0.73% | Overall percentage of negative flips (either location or classification) |
-| Flip Difference | -0.55% | Slight localization advantage for half-trained model |
+| LNF Rate | 2.30% | Half-COCO model finds 836 objects Full-COCO model misses |
+| CNF Rate  | 0.40% | Full-COCO model's classification error rate|
+| TNF Rate | 2.46% | Overall percentage of negative flips (either location or classification) |
+| Flip Difference | -2.14% | Localization differences dominate |
 
 ### Key Statistics
 
 - Total Objects: 36,335
-- Both Models Detect: 4,179 (11.5% - much lower overlap)
-- Location Negative Flips: 233
-- Classification Negative Flips: 34
+- Both Models Detect: 14840  (40.84%)
+- Location Negative Flips (LNF): 836
+- Classification Negative Flips (CNF): 60
