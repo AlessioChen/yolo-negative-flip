@@ -85,3 +85,21 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 - Both Models Detect: 14840  (40.84%)
 - Location Negative Flips (LNF): 836
 - Classification Negative Flips (CNF): 60
+
+# 📍  Conlusion 
+## 1.Training Data Impact vs Universal Performance
+
+The analysis reveals that maintaining the same architecture (YOLOv11n) while increasing training data from half to the complete COCO dataset significantly improves standard metrics performance. 
+However, we can observe a considerable number of localization negative flips (836 objects, 2.3%), meaning the model trained with less data detects objects that the model trained with more data cannot find.
+
+This suggests that **increasing training data does not lead to universal improvement across all objects, but rather causes the model to learn different strategies for object identification**. Different data volumes create distinct detection 
+specializations rather than purely superior performance.
+
+## 2.Localization vs Classification Challenges
+
+From both experiments, we observe that when both models detect the same object, they almost always assign the same class (very low CNF rates). This indicates that:
+
+- Object detection negative flips are concentrated more on localization than  classification
+- Classification performance remains consistent across different models when objects are successfully detected
+- The primary challenge in model evolution is preserving detection coverage, not improving classification accuracy
+
