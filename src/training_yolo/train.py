@@ -23,9 +23,6 @@ def train_yolo(dataset_yaml: str, experiment: Experiment, epochs: int = 10, batc
         model.save(save_path)
         experiment.log_model("trained_model", save_path)
 
-    mAP_05 = results.metrics.get("mAP_0.5")
-    experiment.log_metric("mAP@0.5", mAP_05)
-
     experiment.end()
     return results
 
