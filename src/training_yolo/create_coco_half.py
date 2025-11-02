@@ -1,6 +1,7 @@
 import random
 from pathlib import Path
 
+
 def sample_half_txt(file_path, output_path):
     with open(file_path, "r") as f:
         lines = f.readlines()
@@ -13,6 +14,7 @@ def sample_half_txt(file_path, output_path):
         f.writelines(sampled)
 
     print(f"Wrote {len(sampled)} entries to {output_path}")
+
 
 if __name__ == "__main__":
     base_path = Path("../datasets")  # match `path:` in coco.yaml
