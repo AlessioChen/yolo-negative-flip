@@ -1,0 +1,15 @@
+models:
+  pretrained: "yolo11n.pt"
+  v1: "yolo11n.pt"
+  v2: "runs/detect/train/weights/last.pt"
+
+dataset:
+  images_path: "../datasets/coco/images/val2017"
+  annotations_path: "../datasets/coco/annotations/instances_val2017.json"
+
+inference:
+  iou_threshold: 0.5
+
+output:
+  results_dir: "results"
+  results_file: "negative_flip_analysis_results_11n_vs_distill.json" 

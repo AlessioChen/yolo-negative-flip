@@ -163,7 +163,7 @@ def create_coco_dataset_config(val_images_path, annotations_path):
 
 
 if __name__ == "__main__":
-    with open("config.yml", "r") as f:
+    with open("src/analysis/config.yml", "r") as f:
         config = yaml.safe_load(f)
 
     model_pretrained_path = config["models"]["pretrained"]

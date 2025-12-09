@@ -5,3 +5,6 @@
 .DS_STORE
 .env
 runs/
+
+*.pyc
+/training-yolo/*

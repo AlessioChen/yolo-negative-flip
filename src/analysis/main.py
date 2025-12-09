@@ -9,7 +9,7 @@ import yaml
 
 
 def main():
-    with open("config.yml", "r") as f:
+    with open("src/analysis/config.yml", "r") as f:
         config = yaml.safe_load(f)
 
     iou_threshold = config["inference"]["iou_threshold"]

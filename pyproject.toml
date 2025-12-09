@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "comet-ml>=3.54.0",
     "mypy>=1.18.2",
+    "pycocotools>=2.0.10",
     "pyyaml>=6.0.3",
     "ruff>=0.14.3",
     "tqdm>=4.67.1",
@@ -14,3 +16,8 @@ dependencies = [
 
 [tool.ruff]
 exclude = ["*.ipynb"]
+
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore "unused import" 
+"src/distillation/distill.py" = ["F401"]

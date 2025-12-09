@@ -69,6 +69,7 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 | YOLOv11n - Pre trained | 39.25% | 54.86% | 42.73% | 65.29%      | 50.43 
 | YOLOv11n - Half COCO | 31.20% | 44.71% | 33.80% | 56.66%      | 41.60%  
 | YOLOv11n - Full COCO | 34.99% | 49.41% |  38.09% | 60.35%     | 45.88%
+| YOLOv11n - Distilled  from Yolov8n | 30.47% | 44.93% | 32.87% | 60.58% | 41.34 % 
 
 ### Results Summary
 
@@ -86,6 +87,31 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 - Location Negative Flips (LNF): 836
 - Classification Negative Flips (CNF): 60
 
+
+## 📊 Experiment 3: Knowledge Distillation (YOLOv8n → YOLOv11n)
+
+**Research Question:** Does distilling a YOLOv8n teacher into a YOLOv11n student reduce negative flips and improve transfer of localization/classification knowledge?
+
+This experiment compares:
+
+Teacher: YOLOv8n
+
+Student: YOLOv11n distilled using feature and logit-based KD (custom KD loss)
+
+
+| Metric              | Value                | Interpretation                                                         |
+| ------------------- | -------------------- | ---------------------------------------------------------------------- |
+| **LNF Rate**        | **8.92%**            | Student (YOLOv11n KD) *misses 8.9%* of objects detected by the teacher |
+| **CNF Rate**        | **0.56%** (standard) | Among jointly detected objects, student misclassifies ~0.6%            |
+| **TNF Rate**        | **9.17%**            | Overall degradation relative to teacher detections                     |
+| **Flip Difference** | **-8.67%**           | Large dominance of localization errors                                 |
+
+
+The distillation attempt **failed** to transfer the teacher's localization capabilities. Instead of combining the best of both, the student became confused, performing worse than if it had just ignored the teacher.
+
+- YOLOv8 and YOLOv11 have different internal architectures (C2f vs C3k2 blocks).
+- Channel X in the teacher might not semantically map to Channel X in the student. Forcing them to match via KL Divergence might be destructive. 
+
 # 📍  Conlusion 
 ## 1.Training Data Impact vs Universal Performance
 
@@ -102,4 +128,3 @@ From both experiments, we observe that when both models detect the same object, 
 - Object detection negative flips are concentrated more on localization than  classification
 - Classification performance remains consistent across different models when objects are successfully detected
 - The primary challenge in model evolution is preserving detection coverage, not improving classification accuracy
-

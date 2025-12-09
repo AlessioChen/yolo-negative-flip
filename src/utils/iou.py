@@ -1,13 +1,16 @@
-from typing import List
+from typing import Tuple
 
-def compute_iou(box1: List[float], box2: List[float]) -> float:
+BBox = Tuple[float, float, float, float]
+
+
+def compute_iou(box1: BBox, box2: BBox) -> float:
     """
     Compute Intersection over Union (IoU) between two bounding boxes.
-    
+
     Args:
         box1: First bounding box in format [x1, y1, x2, y2]
         box2: Second bounding box in format [x1, y1, x2, y2]
-        
+
     Returns:
         float: IoU score between 0 and 1
     """
@@ -18,7 +21,7 @@ def compute_iou(box1: List[float], box2: List[float]) -> float:
     y1 = max(box1[1], box2[1])
     x2 = min(box1[2], box2[2])
     y2 = min(box1[3], box2[3])
-    
+
     w = max(0, x2 - x1)
     h = max(0, y2 - y1)
     intersection = w * h
@@ -29,4 +32,14 @@ def compute_iou(box1: List[float], box2: List[float]) -> float:
     union = box1_area + box2_area - intersection
 
     iou = intersection / union if union > 0 else 0
-    return iou 
+    return iou
+
+
+def xyxy_to_yolo_box(
+    x1: float, y1: float, x2: float, y2: float, img_w: int, img_h: int
+) -> BBox:
+    cx = (x1 + x2) / 2.0
+    cy = (y1 + y2) / 2.0
+    w = x2 - x1
+    h = y2 - y1
+    return cx / img_w, cy / img_h, w / img_w, h / img_h
