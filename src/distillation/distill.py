@@ -38,20 +38,23 @@ def setup_logging():
 
 
 class KDLoss(v8DetectionLoss):
-    def __init__(self, model, teacher_model=None, alpha=0.05, T=4.0):
+    def __init__(
+        self, model, teacher_model=None, alpha=3, conf_thresh=0.1, gamma=2.0, T=3.0
+    ):
         super().__init__(model)
         self.model = model
         self.teacher_model = teacher_model
+
         self.alpha = alpha  # Weight for KD loss
-        self.T = T  # Temperature for Softmax
+        self.conf_thresh = conf_thresh
+        self.gamma = gamma
+        self.T = T  # Temperature for softmax
+        self.epsilon = 1e-6
+
         self.reg_max = getattr(model.model[-1], "reg_max", 16)  # usually 16 for v8/v11
         self.nc = model.nc
         self.batch_counter = 0
         self.epoch_counter = 0
-
-        logger.info(
-            f"Initializing KDLoss with alpha={alpha}, T={T}, reg_max={self.reg_max}, nc={self.nc}"
-        )
 
         if self.teacher_model:
             self.teacher_model.eval()
@@ -73,7 +76,6 @@ class KDLoss(v8DetectionLoss):
         with torch.no_grad():
             device = preds[0].device
             if next(self.teacher_model.parameters()).device != device:
-
                 self.teacher_model.to(device)
 
             # The student 'preds' during training is a list of [P3, P4, P5]
@@ -96,8 +98,6 @@ class KDLoss(v8DetectionLoss):
         dist_loss = self.compute_response_distill_loss(preds, teacher_preds)
 
         # 4. Scale and Combine
-        # Standard Ultralytics loss is averaged by batch size inside super().__call__
-        # We multiply alpha by batch size if dist_loss is 'mean', or just use a balanced alpha.
         total_loss = loss + (self.alpha * dist_loss)
 
         if self.batch_counter % 50 == 0:
@@ -143,33 +143,70 @@ class KDLoss(v8DetectionLoss):
                     f"{s_pred.shape} vs {t_pred.shape}"
                 )
                 continue
-            
+
+            B, C, H, W = s_pred.shape
+            split_idx = 4 * self.reg_max
+
+            # Split box / cls
+            s_box, s_cls = s_pred[:, :split_idx], s_pred[:, split_idx:]
+            t_box, t_cls = t_pred[:, :split_idx], t_pred[:, split_idx:]
+
+            # Teacher confidence (CLS)
+            # [B, nc, H, W] → softmax over classes
+            t_prob = F.softmax(t_cls / self.T, dim=1)
+            t_conf, _ = t_prob.max(dim=1, keepdim=True)  # [B,1,H,W]
+
+            # Posive congruent mask
+            mask = (t_conf > self.conf_thresh).float()
+            mask_ratio = mask.mean().item()
+
+            if mask.sum() < 1:
+                logger.info(f"[KD] Layer {i}: no valid KD locations")
+                continue
+
+            # Focal weight
+            focal_weight = (1.0 - t_conf).pow(self.gamma)
+            weight = mask * focal_weight
+
+            # Classification KD (softmax)
+            s_log_softmax = F.log_softmax(s_cls / self.T, dim=1)
+            t_softmax = F.softmax(t_cls / self.T, dim=1)
+            cls_loss = F.kl_div(s_log_softmax, t_softmax, reduction="none")
+
+            cls_weight = weight.expand_as(s_cls)
+            cls_loss = (cls_loss * cls_weight).sum() / (cls_weight.sum() + self.epsilon)
+
+            # Box KD (softmax)
+            s_box_prob = F.log_softmax(s_box.view(B, 4, self.reg_max, H, W), dim=2)
+            t_box_prob = F.softmax(t_box.view(B, 4, self.reg_max, H, W), dim=2)
+
+            box_loss = (
+                F.kl_div(s_box_prob, t_box_prob, reduction="none")
+                .sum(dim=2)
+                .view(B, -1, H, W)
+            )
+            box_weight = weight.expand_as(box_loss)
+            box_loss = (box_loss * box_weight).sum() / (box_weight.sum() + self.epsilon)
+
+            total_cls_loss += cls_loss
+            total_box_loss += box_loss
             valid_layers += 1
 
-            # --- Split into Box Distribution and Class Logits ---
-            # Channel dim is 1. Layout: [Batch, (Box + Class), H, W]
-            # Box part = 4 * reg_max (e.g. 4*16 = 64)
-            split_idx = 4 * self.reg_max
-            s_box, s_cls = s_pred[:, :split_idx, :, :], s_pred[:, split_idx:, :, :]
-            t_box, t_cls = t_pred[:, :split_idx, :, :], t_pred[:, split_idx:, :, :]
+            if self.batch_counter % 50 == 0:
+                logger.info(
+                    f"[KD][Layer {i}] "
+                    f"cls_kd={cls_loss.item():.4f}, "
+                    f"box_kd={box_loss.item():.4f}, "
+                    f"mask_ratio={mask_ratio:.4f}, "
+                    f"t_conf_mean={t_conf.mean().item():.4f}, "
+                    f"focal_mean={focal_weight.mean().item():.4f}"
+                )
 
-            # --- Classification Distillation ---
-            cls_mse = F.mse_loss(s_cls, t_cls, reduction='mean')
-            total_cls_loss += cls_mse
-
-            # --- Box Distillation ---
-            box_mse = F.mse_loss(s_box, t_box, reduction='mean')
-            total_box_loss += box_mse
-        
         if valid_layers == 0:
             logger.info("No valid layers for distillation loss calculation")
             return torch.tensor(0.0, device=student_preds[0].device)
-        
-        return (total_cls_loss + total_box_loss) / valid_layers
 
-    def on_epoch_end(self):
-        self.epoch_counter += 1
-        self.batch_counter = 0
+        return (total_cls_loss + total_box_loss) / valid_layers
 
 
 class KD_Model(DetectionModel):
@@ -219,18 +256,61 @@ if __name__ == "__main__":
     teacher_model_path = "yolov8n.pt"
     student_model_path = "yolo11n.pt"
 
+    kd_alpha = 3.0
+    kd_conf_thresh = 0.1
+    kd_gamma = 2.0
+    kd_temperature = 3.0
+
+    dataset = "coco"
+    epochs = 30
+    imgsz = 640
+
+    experiment_name = (
+        f"KD_Y11n_from_Y8n_"
+        f"a{kd_alpha}_"
+        f"c{kd_conf_thresh}_"
+        f"g{kd_gamma}_"
+        f"T{kd_temperature}_"
+        f"e{epochs}_"
+        f"{dataset}"
+    )
+
     experiment = Experiment(
         project_name="YOLO-Negative-flip",
     )
 
-    experiment.set_name("KD training")
+    experiment.set_name(experiment_name)
+
+    hyperparams = {
+        # KD hyperparameters
+        "kd_alpha": kd_alpha,
+        "kd_conf_thresh": kd_conf_thresh,
+        "kd_gamma": kd_gamma,
+        "kd_temperature": kd_temperature,
+        # Training hyperparameters
+        "epochs": epochs,
+        "imgsz": imgsz,
+        "dataset": dataset,
+        # Model information
+        "teacher_model": "yolov8n",
+        "student_model": "yolo11n",
+        # Loss configuration
+        "loss_type": "response_kd",
+        "distillation_type": "focal_positive_congruent",
+        "kd_components": "cls+box",
+        "mask_type": "confidence_threshold",
+    }
+    experiment.log_parameters(hyperparams)
+
+    logger.info(f"Starting experiment: {experiment_name}")
+    logger.info(f"Hyperparameters: {hyperparams}")
 
     trainer = KDTrainer(
         overrides={
             "model": student_model_path,
-            "data": "coco.yaml",
-            "epochs": 10,
-            "imgsz": 640,
+            "data": f"{dataset}.yaml",
+            "epochs": epochs,
+            "imgsz": imgsz,
             "device": "cuda",
             "teacher": teacher_model_path,
         }
