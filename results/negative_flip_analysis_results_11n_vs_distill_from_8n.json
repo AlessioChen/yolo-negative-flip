@@ -1,0 +1,16 @@
+{
+  "summary": {
+    "N_total": 36335,
+    "N_loc": 17112,
+    "LNF_total": 2442,
+    "CNF_total": 64,
+    "BNF_total": 0,
+    "TNF_total": 2506,
+    "LNF_rate": 0.0672079262419155,
+    "CNF_rate_standard": 0.0037400654511453952,
+    "CNF_rate_common_denom": 0.001761387092335214,
+    "TNF_rate": 0.06896931333425073,
+    "flip_difference": -0.06544653914958029,
+    "iou_threshold": 0.5
+  }
+}

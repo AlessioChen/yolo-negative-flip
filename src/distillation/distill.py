@@ -39,7 +39,7 @@ def setup_logging():
 
 class KDLoss(v8DetectionLoss):
     def __init__(
-        self, model, teacher_model=None, alpha=3, conf_thresh=0.1, gamma=2.0, T=3.0
+        self, model, teacher_model=None, alpha=0.7, conf_thresh=0.1, gamma=1.0, T=2.0
     ):
         super().__init__(model)
         self.model = model
@@ -132,7 +132,6 @@ class KDLoss(v8DetectionLoss):
 
     def compute_response_distill_loss(self, student_preds, teacher_preds):
         total_cls_loss = 0.0
-        total_box_loss = 0.0
         valid_layers = 0
 
         for i, (s_pred, t_pred) in enumerate(zip(student_preds, teacher_preds)):
@@ -147,9 +146,9 @@ class KDLoss(v8DetectionLoss):
             B, C, H, W = s_pred.shape
             split_idx = 4 * self.reg_max
 
-            # Split box / cls
-            s_box, s_cls = s_pred[:, :split_idx], s_pred[:, split_idx:]
-            t_box, t_cls = t_pred[:, :split_idx], t_pred[:, split_idx:]
+            # CLS logits
+            s_cls = s_pred[:, split_idx:]
+            t_cls = t_pred[:, split_idx:]
 
             # Teacher confidence (CLS)
             # [B, nc, H, W] → softmax over classes
@@ -176,27 +175,13 @@ class KDLoss(v8DetectionLoss):
             cls_weight = weight.expand_as(s_cls)
             cls_loss = (cls_loss * cls_weight).sum() / (cls_weight.sum() + self.epsilon)
 
-            # Box KD (softmax)
-            s_box_prob = F.log_softmax(s_box.view(B, 4, self.reg_max, H, W), dim=2)
-            t_box_prob = F.softmax(t_box.view(B, 4, self.reg_max, H, W), dim=2)
-
-            box_loss = (
-                F.kl_div(s_box_prob, t_box_prob, reduction="none")
-                .sum(dim=2)
-                .view(B, -1, H, W)
-            )
-            box_weight = weight.expand_as(box_loss)
-            box_loss = (box_loss * box_weight).sum() / (box_weight.sum() + self.epsilon)
-
             total_cls_loss += cls_loss
-            total_box_loss += box_loss
             valid_layers += 1
 
             if self.batch_counter % 50 == 0:
                 logger.info(
                     f"[KD][Layer {i}] "
                     f"cls_kd={cls_loss.item():.4f}, "
-                    f"box_kd={box_loss.item():.4f}, "
                     f"mask_ratio={mask_ratio:.4f}, "
                     f"t_conf_mean={t_conf.mean().item():.4f}, "
                     f"focal_mean={focal_weight.mean().item():.4f}"
@@ -206,7 +191,7 @@ class KDLoss(v8DetectionLoss):
             logger.info("No valid layers for distillation loss calculation")
             return torch.tensor(0.0, device=student_preds[0].device)
 
-        return (total_cls_loss + total_box_loss) / valid_layers
+        return (total_cls_loss) / valid_layers
 
 
 class KD_Model(DetectionModel):
@@ -256,10 +241,10 @@ if __name__ == "__main__":
     teacher_model_path = "yolov8n.pt"
     student_model_path = "yolo11n.pt"
 
-    kd_alpha = 3.0
+    kd_alpha = 0.7
     kd_conf_thresh = 0.1
-    kd_gamma = 2.0
-    kd_temperature = 3.0
+    kd_gamma = 1.0
+    kd_temperature = 2.0
 
     dataset = "coco"
     epochs = 30
@@ -297,7 +282,7 @@ if __name__ == "__main__":
         # Loss configuration
         "loss_type": "response_kd",
         "distillation_type": "focal_positive_congruent",
-        "kd_components": "cls+box",
+        "kd_components": "cls",
         "mask_type": "confidence_threshold",
     }
     experiment.log_parameters(hyperparams)

@@ -1,7 +1,7 @@
 models:
   pretrained: "yolo11n.pt"
   v1: "yolo11n.pt"
-  v2: "runs/detect/train/weights/last.pt"
+  v2: "runs/detect/train4/weights/best.pt"
 
 dataset:
   images_path: "../datasets/coco/images/val2017"
@@ -12,4 +12,4 @@ inference:
 
 output:
   results_dir: "results"
-  results_file: "negative_flip_analysis_results_11n_vs_distill.json" 
+  results_file: "negative_flip_analysis_results_11n_vs_distill_from_8n.json" 
