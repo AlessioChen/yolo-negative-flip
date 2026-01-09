@@ -37,30 +37,104 @@ def setup_logging():
     return logger
 
 
+class FeatureExtractor(nn.Module):
+    """Helper class to extract intermediate features from YOLO models"""
+
+    def __init__(self, model, layer_indices):
+        super().__init__()
+        self.model = model
+        self.layer_indices = layer_indices
+        self.features = {}
+        self.hooks = []
+
+        for idx in layer_indices:
+            layer = self.model.model[idx]
+            hook = layer.register_forward_hook(self._make_hook_fn(idx))
+            self.hooks.append(hook)
+
+    def _make_hook_fn(self, layer_idx):
+        """Create a closure that captures the layer index"""
+
+        def hook_fn(module, input, output):
+            # Store feature with layer index as key
+            self.features[layer_idx] = output.detach()  # Detach to save memory
+
+        return hook_fn
+
+    def get_features(self):
+        """Return features in order of layer indices"""
+        return [self.features[idx] for idx in self.layer_indices]
+
+    def clear_features(self):
+        """Clear stored features"""
+        self.features.clear()
+
+    def remove_hooks(self):
+        """Remove all hooks (call during cleanup)"""
+        for hook in self.hooks:
+            hook.remove()
+        self.hooks.clear()
+
+
 class KDLoss(v8DetectionLoss):
     def __init__(
-        self, model, teacher_model=None, alpha=0.7, conf_thresh=0.1, gamma=1.0, T=2.0
+        self,
+        model,
+        teacher_model=None,
+        alpha=0.7,
+        conf_thresh=0.1,
+        gamma=1.0,
+        T=2.0,
+        kd_type="response",
+        teacher_feature_layers=None,
+        student_feature_layers=None,
+        feature_beta=1.0,
     ):
         super().__init__(model)
         self.model = model
         self.teacher_model = teacher_model
+        self.kd_type = kd_type
 
         self.alpha = alpha  # Weight for KD loss
         self.conf_thresh = conf_thresh
         self.gamma = gamma
         self.T = T  # Temperature for softmax
+        self.feature_beta = feature_beta  # Weight for feature loss
         self.epsilon = 1e-6
 
-        self.reg_max = getattr(model.model[-1], "reg_max", 16)  # usually 16 for v8/v11
+        self.reg_max = getattr(model.model[-1], "reg_max", 16)
         self.nc = model.nc
         self.batch_counter = 0
         self.epoch_counter = 0
+
+        self.teacher_feature_layers = teacher_feature_layers
+        self.student_feature_layers = student_feature_layers
+
+        if self.kd_type == "feature" and self.teacher_model:
+            self.teacher_extractor = FeatureExtractor(
+                self.teacher_model, teacher_feature_layers or [15, 18, 21]
+            )
+            self.student_extractor = FeatureExtractor(
+                self.model, student_feature_layers or [16, 19, 22]
+            )
+
+            if teacher_feature_layers and student_feature_layers:
+                if len(teacher_feature_layers) != len(student_feature_layers):
+                    raise ValueError(
+                        f"Teacher and student layer counts must match. "
+                        f"Got teacher: {len(teacher_feature_layers)}, student: {len(student_feature_layers)}"
+                    )
 
         if self.teacher_model:
             self.teacher_model.eval()
             self.teacher_model.to(next(model.parameters()).device)
             for param in self.teacher_model.parameters():
                 param.requires_grad = False
+
+        logger.info(f"KDLoss initialized with kd_type='{self.kd_type}'")
+        if self.kd_type == "feature":
+            logger.info(f"Teacher layers: {teacher_feature_layers}")
+            logger.info(f"Student layers: {student_feature_layers}")
 
     def __call__(self, preds, batch):
         # 1. Standard YOLO Loss (Box, Class, DFL)
@@ -72,32 +146,19 @@ class KDLoss(v8DetectionLoss):
             loss_items = torch.cat([loss_items, zero])
             return loss, loss_items
 
-        # 2. Get Teacher Logits
-        with torch.no_grad():
-            device = preds[0].device
-            if next(self.teacher_model.parameters()).device != device:
-                self.teacher_model.to(device)
+        device = preds[0].device
+        if next(self.teacher_model.parameters()).device != device:
+            self.teacher_model.to(device)
 
-            # The student 'preds' during training is a list of [P3, P4, P5]
-            # Each shape: [Batch, 64 + nc, H, W]
-            input_tensor = batch["img"]
-            self.teacher_model.to(preds[0].device)
+        # 2. Calculate Distillation Loss based on type
+        if self.kd_type == "response":
+            dist_loss = self._compute_response_distillation(preds, batch)
+        elif self.kd_type == "feature":
+            dist_loss = self._compute_feature_distillation(batch)
+        else:
+            raise ValueError(f"Unknown kd_type: {self.kd_type}")
 
-            # Forward pass teacher
-            teacher_outputs = self.teacher_model(
-                input_tensor.to(next(self.teacher_model.parameters()).dtype)
-            )
-
-            teacher_preds = (
-                teacher_outputs[1]
-                if isinstance(teacher_outputs, tuple)
-                else teacher_outputs
-            )
-
-        # 3. Calculate Distillation Loss
-        dist_loss = self.compute_response_distill_loss(preds, teacher_preds)
-
-        # 4. Scale and Combine
+        # 3. Scale and Combine
         total_loss = loss + (self.alpha * dist_loss)
 
         if self.batch_counter % 50 == 0:
@@ -115,7 +176,7 @@ class KDLoss(v8DetectionLoss):
 
             logger.info(
                 f"[Epoch {self.epoch_counter}, Batch {self.batch_counter}] "
-                f"Distillation Loss: {dist_loss_float:.4f} (alpha={self.alpha})"
+                f"Distillation Loss ({self.kd_type}): {dist_loss_float:.4f} (alpha={self.alpha})"
             )
             logger.info(
                 f"[Epoch {self.epoch_counter}, Batch {self.batch_counter}] "
@@ -130,7 +191,85 @@ class KDLoss(v8DetectionLoss):
         self.batch_counter += 1
         return total_loss, loss_items
 
+    def _compute_response_distillation(self, student_preds, batch):
+        with torch.no_grad():
+            input_tensor = batch["img"]
+            teacher_outputs = self.teacher_model(
+                input_tensor.to(next(self.teacher_model.parameters()).dtype)
+            )
+            teacher_preds = (
+                teacher_outputs[1]
+                if isinstance(teacher_outputs, tuple)
+                else teacher_outputs
+            )
+
+        return self.compute_response_distill_loss(student_preds, teacher_preds)
+
+    def _compute_feature_distillation(self, batch):
+        """Feature-based L2 distillation with separate teacher/student layers"""
+        input_tensor = batch["img"]
+
+        with torch.no_grad():
+            self.teacher_extractor.clear_features()  # Clear previous features
+            _ = self.teacher_model(
+                input_tensor.to(next(self.teacher_model.parameters()).dtype)
+            )
+            teacher_features = self.teacher_extractor.get_features()
+
+        # Student features are already captured during the main forward pass
+        # Just retrieve them from the hooks
+        student_features = self.student_extractor.get_features()
+
+        # Clear for next batch
+        self.student_extractor.clear_features()
+
+        return self.compute_feature_distill_loss(student_features, teacher_features)
+
+    def compute_feature_distill_loss(self, student_features, teacher_features):
+        """
+        Compute L2 loss between student and teacher features
+        """
+        if len(student_features) != len(teacher_features):
+            logger.warning(
+                f"Feature count mismatch: student={len(student_features)}, "
+                f"teacher={len(teacher_features)}"
+            )
+            return torch.tensor(0.0, device=student_features[0].device)
+
+        total_loss = 0.0
+        valid_layers = 0
+
+        for i, (s_feat, t_feat) in enumerate(zip(student_features, teacher_features)):
+            # Get layer indices for logging
+            teacher_idx = (
+                self.teacher_feature_layers[i] if self.teacher_feature_layers else i
+            )
+            student_idx = (
+                self.student_feature_layers[i] if self.student_feature_layers else i
+            )
+
+            # Compute L2 loss
+            loss = F.mse_loss(s_feat, t_feat.detach())
+
+            total_loss += loss * self.feature_beta
+            valid_layers += 1
+
+            if self.batch_counter % 50 == 0:
+                logger.info(
+                    f"[Feature KD][Map {i}: T_L{teacher_idx}→S_L{student_idx}] "
+                    f"L2: {loss.item():.6f}, "
+                    f"S_mean: {s_feat.mean().item():.4f}, T_mean: {t_feat.mean().item():.4f}, "
+                    f"S_std: {s_feat.std().item():.4f}, T_std: {t_feat.std().item():.4f}"
+                )
+
+        if valid_layers == 0:
+            logger.warning("No valid layers for feature distillation")
+            return torch.tensor(0.0, device=student_features[0].device)
+
+        return total_loss / valid_layers
+
     def compute_response_distill_loss(self, student_preds, teacher_preds):
+        """Original response-based distillation loss"""
         total_cls_loss = 0.0
         valid_layers = 0
 
@@ -151,11 +290,10 @@ class KDLoss(v8DetectionLoss):
             t_cls = t_pred[:, split_idx:]
 
             # Teacher confidence (CLS)
-            # [B, nc, H, W] → softmax over classes
             t_prob = F.softmax(t_cls / self.T, dim=1)
             t_conf, _ = t_prob.max(dim=1, keepdim=True)  # [B,1,H,W]
 
-            # Posive congruent mask
+            # Positive congruent mask
             mask = (t_conf > self.conf_thresh).float()
             mask_ratio = mask.mean().item()
 
@@ -180,7 +318,7 @@ class KDLoss(v8DetectionLoss):
 
             if self.batch_counter % 50 == 0:
                 logger.info(
-                    f"[KD][Layer {i}] "
+                    f"[Response KD][Layer {i}] "
                     f"cls_kd={cls_loss.item():.4f}, "
                     f"mask_ratio={mask_ratio:.4f}, "
                     f"t_conf_mean={t_conf.mean().item():.4f}, "
@@ -191,21 +329,47 @@ class KDLoss(v8DetectionLoss):
             logger.info("No valid layers for distillation loss calculation")
             return torch.tensor(0.0, device=student_preds[0].device)
 
-        return (total_cls_loss) / valid_layers
+        return total_cls_loss / valid_layers
 
 
 class KD_Model(DetectionModel):
-    def __init__(self, cfg, teacher_weights, **kwargs):
+    def __init__(
+        self,
+        cfg,
+        teacher_weights,
+        kd_type="response",
+        teacher_feature_layers=None,
+        student_feature_layers=None,
+        feature_beta=1.0,
+        **kwargs,
+    ):
         super().__init__(cfg, **kwargs)
         self.teacher_weights = teacher_weights
+        self.kd_type = kd_type
+        self.teacher_feature_layers = teacher_feature_layers
+        self.student_feature_layers = student_feature_layers
+        self.feature_beta = feature_beta
 
     def init_criterion(self):
         if self.teacher_weights:
-            print(f"Loading teacher model for Response KD: {self.teacher_weights}")
+            print(
+                f"Loading teacher model for {self.kd_type.upper()} KD: {self.teacher_weights}"
+            )
+            if self.kd_type == "feature":
+                print(f"Teacher feature layers: {self.teacher_feature_layers}")
+                print(f"Student feature layers: {self.student_feature_layers}")
             teacher = YOLO(self.teacher_weights).model
         else:
             teacher = None
-        return KDLoss(self, teacher_model=teacher)
+
+        return KDLoss(
+            self,
+            teacher_model=teacher,
+            kd_type=self.kd_type,
+            teacher_feature_layers=self.teacher_feature_layers,
+            student_feature_layers=self.student_feature_layers,
+            feature_beta=self.feature_beta,
+        )
 
 
 class KDTrainer(DetectionTrainer):
@@ -213,12 +377,20 @@ class KDTrainer(DetectionTrainer):
         if overrides is None:
             overrides = {}
         self.teacher_weights = overrides.pop("teacher", None)
+        self.kd_type = overrides.pop("kd_type", "response")
+        self.teacher_feature_layers = overrides.pop("teacher_feature_layers", None)
+        self.student_feature_layers = overrides.pop("student_feature_layers", None)
+        self.feature_beta = overrides.pop("feature_beta", 1.0)
         super().__init__(cfg, overrides, _callbacks)
 
     def get_model(self, cfg=None, weights=None, verbose=False):
         model = KD_Model(
             cfg,
             teacher_weights=self.teacher_weights,
+            kd_type=self.kd_type,
+            teacher_feature_layers=self.teacher_feature_layers,
+            student_feature_layers=self.student_feature_layers,
+            feature_beta=self.feature_beta,
             nc=self.data["nc"],
             verbose=verbose,
         )
@@ -241,24 +413,22 @@ if __name__ == "__main__":
     teacher_model_path = "yolov8n.pt"
     student_model_path = "yolo11n.pt"
 
+    kd_type = "feature"
+
+    teacher_feature_layers = [15, 18, 21]  # YOLOv8 P3, P4, P5
+    student_feature_layers = [16, 19, 22]  # YOLOv11 P3, P4, P5
+
     kd_alpha = 0.7
     kd_conf_thresh = 0.1
     kd_gamma = 1.0
     kd_temperature = 2.0
+    feature_beta = 1.0  # Weight for feature loss
 
     dataset = "coco"
     epochs = 30
     imgsz = 640
 
-    experiment_name = (
-        f"KD_Y11n_from_Y8n_"
-        f"a{kd_alpha}_"
-        f"c{kd_conf_thresh}_"
-        f"g{kd_gamma}_"
-        f"T{kd_temperature}_"
-        f"e{epochs}_"
-        f"{dataset}"
-    )
+    experiment_name = f"KD_{kd_type}_Y11n_from_Y8n_a{kd_alpha}_e{epochs}_{dataset}"
 
     experiment = Experiment(
         project_name="YOLO-Negative-flip",
@@ -268,10 +438,18 @@ if __name__ == "__main__":
 
     hyperparams = {
         # KD hyperparameters
+        "kd_type": kd_type,
         "kd_alpha": kd_alpha,
         "kd_conf_thresh": kd_conf_thresh,
         "kd_gamma": kd_gamma,
         "kd_temperature": kd_temperature,
+        "feature_beta": feature_beta,
+        "teacher_feature_layers": teacher_feature_layers
+        if kd_type == "feature"
+        else None,
+        "student_feature_layers": student_feature_layers
+        if kd_type == "feature"
+        else None,
         # Training hyperparameters
         "epochs": epochs,
         "imgsz": imgsz,
@@ -280,15 +458,17 @@ if __name__ == "__main__":
         "teacher_model": "yolov8n",
         "student_model": "yolo11n",
         # Loss configuration
-        "loss_type": "response_kd",
-        "distillation_type": "focal_positive_congruent",
-        "kd_components": "cls",
-        "mask_type": "confidence_threshold",
+        "loss_type": f"{kd_type}_kd",
+        "distillation_type": "focal_positive_congruent"
+        if kd_type == "response"
+        else "l2_feature",
+        "kd_components": "cls" if kd_type == "response" else "features",
     }
     experiment.log_parameters(hyperparams)
 
     logger.info(f"Starting experiment: {experiment_name}")
     logger.info(f"Hyperparameters: {hyperparams}")
+    logger.info(f"Using {kd_type.upper()} distillation")
 
     trainer = KDTrainer(
         overrides={
@@ -298,6 +478,10 @@ if __name__ == "__main__":
             "imgsz": imgsz,
             "device": "cuda",
             "teacher": teacher_model_path,
+            "kd_type": kd_type,
+            "teacher_feature_layers": teacher_feature_layers,
+            "student_feature_layers": student_feature_layers,
+            "feature_beta": feature_beta,
         }
     )
 
