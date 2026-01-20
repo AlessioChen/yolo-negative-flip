@@ -40,40 +40,50 @@ def setup_logging():
 class FeatureExtractor(nn.Module):
     """Helper class to extract intermediate features from YOLO models"""
 
-    def __init__(self, model, layer_indices):
+    def __init__(self, model):
         super().__init__()
         self.model = model
-        self.layer_indices = layer_indices
-        self.features = {}
-        self.hooks = []
+        self.features = []
 
+    def _hook_fn(self, module, input, output):
+        self.features.append(output)
+
+    def extract_features(self, x, layer_indices=None):
+        """
+        Extract features from specified layers
+        Args:
+            x: input tensor
+            layer_indices: list of layer indices to extract features from
+                          If None, extracts from backbone output layers
+
+        YOLOv8 Architecture:
+            Layer 15: C2f (P3) - 64 channels  - Small objects
+            Layer 18: C2f (P4) - 128 channels - Medium objects
+            Layer 21: C2f (P5) - 256 channels - Large objects
+            Layer 22: Detect head (final layer)
+        """
+        self.features = []
+        hooks = []
+
+        # Default to extracting from P3, P4, P5 neck outputs (before detection head)
+        # These are the direct inputs to the detection head at each scale
+        if layer_indices is None:
+            layer_indices = [15, 18, 21]  # C2f outputs for P3, P4, P5
+
+        # Register hooks
         for idx in layer_indices:
             layer = self.model.model[idx]
-            hook = layer.register_forward_hook(self._make_hook_fn(idx))
-            self.hooks.append(hook)
+            hook = layer.register_forward_hook(self._hook_fn)
+            hooks.append(hook)
 
-    def _make_hook_fn(self, layer_idx):
-        """Create a closure that captures the layer index"""
+        # Forward pass
+        _ = self.model(x)
 
-        def hook_fn(module, input, output):
-            # Store feature with layer index as key
-            self.features[layer_idx] = output.detach()  # Detach to save memory
-
-        return hook_fn
-
-    def get_features(self):
-        """Return features in order of layer indices"""
-        return [self.features[idx] for idx in self.layer_indices]
-
-    def clear_features(self):
-        """Clear stored features"""
-        self.features.clear()
-
-    def remove_hooks(self):
-        """Remove all hooks (call during cleanup)"""
-        for hook in self.hooks:
+        # Remove hooks
+        for hook in hooks:
             hook.remove()
-        self.hooks.clear()
+
+        return self.features
 
 
 class KDLoss(v8DetectionLoss):
@@ -111,12 +121,8 @@ class KDLoss(v8DetectionLoss):
         self.student_feature_layers = student_feature_layers
 
         if self.kd_type == "feature" and self.teacher_model:
-            self.teacher_extractor = FeatureExtractor(
-                self.teacher_model, teacher_feature_layers or [15, 18, 21]
-            )
-            self.student_extractor = FeatureExtractor(
-                self.model, student_feature_layers or [16, 19, 22]
-            )
+            self.teacher_extractor = FeatureExtractor(self.teacher_model)
+            self.student_extractor = FeatureExtractor(self.model)
 
             if teacher_feature_layers and student_feature_layers:
                 if len(teacher_feature_layers) != len(student_feature_layers):
@@ -210,18 +216,14 @@ class KDLoss(v8DetectionLoss):
         input_tensor = batch["img"]
 
         with torch.no_grad():
-            self.teacher_extractor.clear_features()  # Clear previous features
-            _ = self.teacher_model(
-                input_tensor.to(next(self.teacher_model.parameters()).dtype)
+            teacher_features = self.teacher_extractor.extract_features(
+                input_tensor.to(next(self.teacher_model.parameters()).dtype),
+                self.teacher_feature_layers,
             )
-            teacher_features = self.teacher_extractor.get_features()
 
-        # Student features are already captured during the main forward pass
-        # Just retrieve them from the hooks
-        student_features = self.student_extractor.get_features()
-
-        # Clear for next batch
-        self.student_extractor.clear_features()
+        student_features = self.student_extractor.extract_features(
+            input_tensor, self.student_feature_layers
+        )
 
         return self.compute_feature_distill_loss(student_features, teacher_features)
 
@@ -355,9 +357,7 @@ class KD_Model(DetectionModel):
             print(
                 f"Loading teacher model for {self.kd_type.upper()} KD: {self.teacher_weights}"
             )
-            if self.kd_type == "feature":
-                print(f"Teacher feature layers: {self.teacher_feature_layers}")
-                print(f"Student feature layers: {self.student_feature_layers}")
+
             teacher = YOLO(self.teacher_weights).model
         else:
             teacher = None
