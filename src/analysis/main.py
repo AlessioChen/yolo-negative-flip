@@ -4,6 +4,7 @@ from ultralytics import YOLO
 from pycocotools.coco import COCO
 from src.models.detector import run_inference
 from src.analysis.negative_flips import analyze_negative_flips
+from src.distillation.distill import KD_Model
 import os
 import yaml
 
