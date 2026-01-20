@@ -1,11 +1,11 @@
 models:
   pretrained: "yolov8n.pt"
   v1: "yolov8n.pt"
-  v2: "runs/detect/train9/weights/best.pt"
+  v2: "runs/detect/train2/weights/best.pt"
 
 dataset:
-  images_path: "../datasets/coco/images/val2017"
-  annotations_path: "../datasets/coco/annotations/instances_val2017.json"
+  images_path: "training-yolo/datasets/coco/images/val2017"
+  annotations_path: "training-yolo/datasets/coco/annotations/instances_val2017.json"
 
 inference:
   iou_threshold: 0.5

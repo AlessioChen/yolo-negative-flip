@@ -131,18 +131,25 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 | YOLOv11n - Response KD from YOLOv8n | 36.64% | 51.53% | 39.69% | 63.63%      | 47.17%
 | YOLOv11n - Pre trained | 39.25% | 54.86% | 42.73% | 65.29%      | 50.43%
 
-
 ### Negative Flip Analysis Results
 Comparison: YOLOv8n (Teacher/Baseline) vs YOLOv11n with Knowledge Distillation (Student)
 
-**Response based KD Results** 
-| Metric | Value | Interpretation |
-|------|-------|-------------|
-| LNF Rate | 7.88% | YOLOv11n Response KD misses 7.88%  of objects that YOLOv8n detects |
-| CNF Rate  | 0.54% | Among jointly detected objects, YOLOv11n-Response-KD misclassifies 0.54% |
-| TNF Rate | 8.12% | Overall percentage of negative flips (either location or classification) |
-| Flip Difference | -7.63% | Localization differences dominate |
+| Metric | Experiment 1 | Response-based KD | Feature-based KD |
+|------|------------------|------------------|------------------|
+| **LNF Rate** | 2.30%| 8.06% | 7.88% |
+| **CNF Rate** |0.40%  | 0.49% | 0.54% |
+| **TNF Rate** | 2.46% | 8.29% | 8.12% |
+| **Flip Difference** | -2.14% | -7.84% | -7.63% |
+| **Dominant Error Type** | Localizatio | Localization | Localization |
 
+### Key Statistics Comparison
+
+| Statistic | Experiment 1|  Response-based KD | Feature-based KD |
+|---------|------------------|------------------|------------------|
+| **Total Objects** | 36,335  | 36,335 | 36,335 |
+| **Objects Detected by Both Models** |17,474 (48.1%) | 16,399 (45.12%) | 16,464 (45.2%) |
+| **Location Negative Flips** |1,853 | 2,928 | 2,863 |
+| **Classification Negative Flips**| 92 | 81 | 89 |
 
 
 # 📍  Conlusion 
