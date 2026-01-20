@@ -2,6 +2,7 @@ from ultralytics import YOLO
 import os
 import yaml
 import tempfile
+from src.distillation.distill import KD_Model
 
 
 def evaluate_model_performance(model, val_images_path, annotations_path):
