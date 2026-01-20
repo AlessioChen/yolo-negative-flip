@@ -1,16 +1,16 @@
 {
   "summary": {
     "N_total": 36335,
-    "N_loc": 17047,
-    "LNF_total": 2507,
-    "CNF_total": 65,
+    "N_loc": 16464,
+    "LNF_total": 2863,
+    "CNF_total": 89,
     "BNF_total": 0,
-    "TNF_total": 2572,
-    "LNF_rate": 0.06899683500756847,
-    "CNF_rate_standard": 0.003812987622455564,
-    "CNF_rate_common_denom": 0.0017889087656529517,
-    "TNF_rate": 0.07078574377322142,
-    "flip_difference": -0.06720792624191552,
+    "TNF_total": 2952,
+    "LNF_rate": 0.07879455070868309,
+    "CNF_rate_standard": 0.005405733722060253,
+    "CNF_rate_common_denom": 0.002449428925278657,
+    "TNF_rate": 0.08124397963396174,
+    "flip_difference": -0.07634512178340443,
     "iou_threshold": 0.5
   }
 }

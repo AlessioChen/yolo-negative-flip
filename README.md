@@ -35,8 +35,8 @@ python src/training-yolo/dowload_coco.py
 ### Standard metrics
 | Model     | mAp   | mAp50 | mAp75 | Precision  | Recall | 
 |-----------|-------|-------|-------|------------|--------|
+| YOLOv8n  - Pre trained | 37.14% | 52.11% | 40.39% | 63.41%      | 47.43%
 | YOLOv11n - Pre trained | 39.25% | 54.86% | 42.73% | 65.29%      | 50.43%
-| YOLOv11n - Distilled  from Yolov8n (Feature) | 36.53% | 51.36% | 39.37% | 63.17% | 47.01 % 
 
 
 ### Results Summary
@@ -76,7 +76,6 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 | YOLOv11n - Pre trained | 39.25% | 54.86% | 42.73% | 65.29%      | 50.43 
 | YOLOv11n - Half COCO | 31.20% | 44.71% | 33.80% | 56.66%      | 41.60%  
 | YOLOv11n - Full COCO | 34.99% | 49.41% |  38.09% | 60.35%     | 45.88%
-| YOLOv11n - Distilled  from Yolov8n (Feature) | 36.53% | 51.36% | 39.37% | 63.17% | 47.01 % 
 
 ### Results Summary
 
@@ -93,6 +92,57 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 - Both Models Detect: 14840  (40.84%)
 - Location Negative Flips (LNF): 836
 - Classification Negative Flips (CNF): 60
+
+# 📊 Experiment 3: Knowledge Distillation (KD) Impact (YOLOv8n Teacher → YOLOv11n Student)
+**Research Question**: Can knowledge distillation from an older architecture improve newer model performance and reduce negative flips?
+
+## Methology
+### KD Setup:
+- **Teacher Model**: YOLOv8n (pre-trained)
+- **Student Model**: YOLOv11n (trained from scratch with KD)
+- Two Distillation Types Tested:
+    1. **Feature-based KD**: L2 distillation on intermediate features
+    2. **Response-based KD**: KL divergence on detection head outputs
+
+### Feature-based Distillation
+**Layer Mapping**: 
+- YOLOv8 layers [15, 18, 21] → YOLOv11 layers [16, 19, 22]
+- Targets P3, P4, P5 multi-scale features (small, medium, large objects)
+**Loss Function**: $$\text{Standard YOLO Loss} + \alpha \times \text{L2(student features, teacher feataures)}$$
+
+### Response-based Distillation
+
+- **Distillation Target**: Detection head outputs (bbox + classification logits)
+- **Loss Function**: $$ \text{Standard YOLO Loss} + \alpha \times  \text{KL divergence(student logits, teacher logits)}$$
+- **Strategy** : Focal weighting with confidence thresholding on teacher predictions
+
+### Common Training Setup:
+
+- **Training**: 30 epochs on full COCO dataset
+- **Image size**: 640×640
+- **Optimizer**: SGD with standard YOLO settings
+
+
+### Standard metrics
+| Model     | mAp   | mAp50 | mAp75 | Precision  | Recall | 
+|-----------|-------|-------|-------|------------|--------|
+| YOLOv8n  - Pre trained (Teacher) | 37.14% | 52.11% | 40.39% | 63.41%      | 47.43%
+| YOLOv11n - Feature KD from YOLOv8n | 36.53%| 51.36% | 39.37%| 63.17%     | 47.01%
+| YOLOv11n - Response KD from YOLOv8n | 36.64% | 51.53% | 39.69% | 63.63%      | 47.17%
+| YOLOv11n - Pre trained | 39.25% | 54.86% | 42.73% | 65.29%      | 50.43%
+
+
+### Negative Flip Analysis Results
+Comparison: YOLOv8n (Teacher/Baseline) vs YOLOv11n with Knowledge Distillation (Student)
+
+**Response based KD Results** 
+| Metric | Value | Interpretation |
+|------|-------|-------------|
+| LNF Rate | 7.88% | YOLOv11n Response KD misses 7.88%  of objects that YOLOv8n detects |
+| CNF Rate  | 0.54% | Among jointly detected objects, YOLOv11n-Response-KD misclassifies 0.54% |
+| TNF Rate | 8.12% | Overall percentage of negative flips (either location or classification) |
+| Flip Difference | -7.63% | Localization differences dominate |
+
 
 
 # 📍  Conlusion 

@@ -1,6 +1,6 @@
 models:
-  pretrained: "yolo11n.pt"
-  v1: "yolo11n.pt"
+  pretrained: "yolov8n.pt"
+  v1: "yolov8n.pt"
   v2: "runs/detect/train9/weights/best.pt"
 
 dataset:
