@@ -108,73 +108,38 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 - **Image size**: 640×640
 - **Optimizer**: SGD with standard YOLO settings
 
-Two KD strategies were evaluated. 
+### KD types: 
+1. **Feature-based KD**
+Encourages intermediate representation similarity: 
 
-### Feature-based KD
-The objective is to encourage intermediate representation similarity between teacher and student 
-
-**Layer**: 
-- YOLOv8 layers [15, 18, 21] → YOLOv11 layers [16, 19, 22]
-- Targets P3, P4, P5 multi-scale features (small, medium, large objects)
-
-### Response-based KD
-The objective is to transfer class probabilities structure from the teacher detection head to the student 
-
-- **Target**: Detection head classification logits
-- **Strategy** : Focal weighting with confidence thresholding on teacher predictions
-
-### Common Training Setup:
-
-- **Training**: 30 epochs on full COCO dataset
-- **Image size**: 640×640
-- **Optimizer**: SGD with standard YOLO settings
+$$L_{{KD}}^{{feat}} = \frac{1}{K} \sum_{k=1}^{K} \| F_s^{k} - F_t^{k} \|_2^2$$
+- $$F_s^{k} - F_{t}^{k}$$: student and teacher feature maps 
+- $$K$$: P3,P4,P3 feature levels 
 
 
-## Loss function details 
 
-**Base detection Loss (YOLOv8 /YOLOv11)**
-
-$$L_{YOLO} = L_{box} + L_{cls} + L_{dfl}$$
-
-**Combined training objective with KD**
-
-$$L_{Total} = L_{YOLO} + \alpha \times L_{KD}$$
-
-
-### Response based KD loss 
-The objective is to transfer class probabilities structure from the teacher detection head to the student 
+2. **Response-based KD**
+Aligns detection head class probabilities:
 
 $$
 L_{KD}^{resp} = \frac{1}{L} \sum_{l=1}^{L} w_{focal}^l \cdot 
 KL\Big(\text{softmax}(\frac{z_s^l}{T}), \text{softmax}(\frac{z_t^l}{T})\Big)
 $$
 
-where: 
 
 - $$z_s, z_t$$, students and teacher classification logits 
 - T: temperature scaling 
-- L: detection head layers 
-- $${w}_{focal}$$: confidence-aware weighting 
+- L: detection head layers
+- $$p_t=\max (softmax(z_t)) > threshHold$$
+- $${w}_{focal}: (1-p_t)^{\gamma}$$
 
 
-Distillation is applied only when the teacher is confident
 
-$$p_t=\max (softmax(z_t)) > conf_thresh)$$
+**Total Training Loss**
 
-Focal Weighting: each location is reweighted
+$$L_{YOLO} = L_{box} + L_{cls} + L_{dfl}$$
 
-$$w_{focal} = (1 - p_t)^{\gamma}$$
-
-
-### Feature based KD loss 
-The objective is to encourage intermediate representation similarity between teacher and student 
-
-$$L_{{KD}}^{{feat}} = \frac{1}{K} \sum_{k=1}^{K} \| F_s^{k} - F_t^{k} \|_2^2$$
-
-where: 
-
-- $$F_s^{k} - F_{t}^{k}$$: student and teacher feature maps 
-- $$K$$: P3,P4,P3 feature levels 
+$$L_{Total} = L_{YOLO} + \alpha \times L_{KD}$$
 
 
 
@@ -217,21 +182,15 @@ Comparison: YOLOv8n (Teacher/Baseline) vs YOLOv11n with Knowledge Distillation (
 
 # 📍  Conlusion 
 ## 1.Training Data Impact vs Universal Performance
+- Increasing training data improves standard metrics, but the model may fail to detect certain objects previously detected with less data (e.g., 2.3% LNF).
+- Models trained on different data volumes specialize differently in detection, rather than achieving universally superior performance.
 
-The analysis reveals that maintaining the same architecture (YOLOv11n) while increasing training data from half to the complete COCO dataset significantly improves standard metrics performance. 
-However, i can observe a considerable number of localization negative flips (836 objects, 2.3%), meaning the model trained with less data detects objects that the model trained with more data cannot find.
-
-This suggests that **increasing training data does not lead to universal improvement across all objects, but rather causes the model to learn different strategies for object identification**. Different data volumes create distinct detection 
-specializations rather than purely superior performance.
 
 ## 2.Localization vs Classification Challenges
-
-From the experiments, i observe that when both models detect the same object, they almost always assign the same class (very low CNF rates). This indicates that:
-
-- Object detection negative flips are concentrated more on localization than  classification
-- Classification performance remains consistent across different models when objects are successfully detected
-- The primary challenge in model evolution is preserving detection coverage, not improving classification accuracy
+- Negative flips are concentrated on localization.
+- Classification performance remains consistent once objects are detected.
+- Model evolution efforts should focus on maintaining detection coverage, not classification improvement.
 
 ## 3.Knowledge Distillation & Negative Flip Analysis
-Despite architectural advances in YOLO11n, i observe that KD from YOLOV8n does not reduce negative flips, and in fact it has increased localication failures, even though standard metrcs remain competive. 
-
+- KD from an older teacher (YOLOv8n → YOLOv11n) does not reduce negative flips.
+- KD may increase localization errors despite maintaining competitive standard metrics.
