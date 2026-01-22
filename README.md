@@ -1,15 +1,17 @@
 # Negative Flip Analysis: Object Detection Model Comparison
 
-Mathematical analysis of "negative flips" to quantify performance degradation between object detection models on the COCO dataset.
+This work introduces a **Negagive Flip Analysis** to quantify performance regression between object detection models beyond standard metrics such as mAP. 
+All experiments are conducted on the COCO validation dataset using YOL-based detector.
 
 ## 🎯 What is Negative Flip?
+A **Negative Flip** occurs when an object is correctly detected by a baseline model (Model A) but missed by the new model (Model B).
 
-**Negative Flip**: when an object is detected by the baseline (Model A) but missed by the new model (Model B)
+I defined three types: 
 - **Location Negative Flip (LNF)**: Objects correctly detected by Model A but missed by Model B
 - **Classification Negative Flip (CNF)**: Objects detected by both models, but misclassified by Model B
 - **Total Negative Flip (TNF)**: Combined failures across both categories
 
-## 📐 Rates
+## 📐 Negative flip Rates
 ``` 
 LNF_rate = LNF_total / N_total
 CNF_rate = CNF_total / N_loc  
@@ -27,34 +29,36 @@ You can download COCO by running:
 ``` 
 python src/training-yolo/dowload_coco.py
 ``` 
+All experiments use: 
+- COCO validation set
+- IoU threshold = 0.5 
+- 36,335 ground-truth objects
 
 
 ## 📊 Experiment 1: Architectural Evolution (YOLOv8n vs YOLOv11n)
-**Research Question:** How do architectural improvements affect detection performance?
+**Research Question:** How do architectural improvements affect detection performance and negative flips?
 
 ### Standard metrics
 | Model     | mAp   | mAp50 | mAp75 | Precision  | Recall | 
 |-----------|-------|-------|-------|------------|--------|
 | YOLOv8n  - Pre trained | 37.14% | 52.11% | 40.39% | 63.41%      | 47.43%
-| YOLOv11n - Pre trained | 39.25% | 54.86% | 42.73% | 65.29%      | 50.43%
+| YOLOv11n - Pre trained | **39.25%** | **54.86%** | **42.73%** | **65.29%** | **50.43%**
 
-
-### Results Summary
-Analysis on 36,335 COCO validation objects (IoU threshold: 0.5)
+### Negative Flip Results 
 
 | Metric | Value | Interpretation |
 |------|-------|-------------|
 | LNF Rate | 5.10% | YOLOv11n misses 5.1% of objects that YOLOv8n detects |
-| CNF Rate  | 0.53% | Among jointly detected objects, YOLOv11n misclassifies 0.53% |
-| TNF Rate | 5.35% | Overall percentage of negative flips (either location or classification) |
-| Flip Difference | -4.85% | Localization issues dominate over classification issues |
+| CNF Rate  | 0.53% | Very few misclassifications among shared detections|
+| TNF Rate | 5.35% | Overall negative flip rate |
+| Flip Difference | **-4.85%** | Localization dominates |
 
 #### Key Statistics
 
-- Total Objects: 36,335
-- Both Models Detected objects: 17,474 (48.1%)
-- Location Negative Flips: 1,853
-- Classification Negative Flips: 92
+- Total Objects: **36,335**
+- Both Models Detected objects: **17,474 (48.1%)**
+- Location Negative Flips: **1,853**
+- Classification Negative Flips: **92**
 
 
 ## 📊 Experiment 2: Training Data Scale Impact (Half COCO vs Full COCO)
@@ -75,45 +79,51 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 |-----------|-------|-------|-------|------------|--------|
 | YOLOv11n - Pre trained | 39.25% | 54.86% | 42.73% | 65.29%      | 50.43 
 | YOLOv11n - Half COCO | 31.20% | 44.71% | 33.80% | 56.66%      | 41.60%  
-| YOLOv11n - Full COCO | 34.99% | 49.41% |  38.09% | 60.35%     | 45.88%
+| YOLOv11n - Full COCO | **34.99%** | **49.41%** |  **38.09%** | **60.35%**     | **45.88%**
 
 ### Results Summary
 
 | Metric | Value | Interpretation |
 |------|-------|-------------|
 | LNF Rate | 2.30% | Half-COCO model finds 836 objects Full-COCO model misses |
-| CNF Rate  | 0.40% | Full-COCO model's classification error rate|
-| TNF Rate | 2.46% | Overall percentage of negative flips (either location or classification) |
-| Flip Difference | -2.14% | Localization differences dominate |
+| CNF Rate  | 0.40% | Classification remains stable |
+| TNF Rate | 2.46% | Overall negative flip rate  |
+| Flip Difference | -2.14% | Localization dominates |
 
 ### Key Statistics
 
-- Total Objects: 36,335
-- Both Models Detect: 14840  (40.84%)
-- Location Negative Flips (LNF): 836
-- Classification Negative Flips (CNF): 60
+- Total Objects: **36,335**
+- Both Models Detect: **14840  (40.84%)**
+- Location Negative Flips (LNF): **836**
+- Classification Negative Flips (CNF): **60**
 
-# 📊 Experiment 3: Knowledge Distillation (KD) Impact (YOLOv8n Teacher → YOLOv11n Student)
-**Research Question**: Can knowledge distillation from an older architecture improve newer model performance and reduce negative flips?
+# 📊 Experiment 3: Knowledge Distillation 
+**Research Question**: Can knowledge distillation reduce negative flips when transferring from an older architecture?
 
 ## Methology
 ### KD Setup:
-- **Teacher Model**: YOLOv8n (pre-trained)
-- **Student Model**: YOLOv11n (trained from scratch with KD)
-- Two Distillation Types Tested:
-    1. **Feature-based KD**: L2 distillation on intermediate features
-    2. **Response-based KD**: KL divergence on detection head outputs
+- **Teacher**: YOLOv8n (pre-trained)
+- **Student**: YOLOv11n (trained from scratch)
+- **Training**: 30 epochs on full COCO dataset
+- **Image size**: 640×640
+- **Optimizer**: SGD with standard YOLO settings
 
-### Feature-based Distillation
-**Layer Mapping**: 
+Two KD strategies were evaluated. 
+
+### Feature-based KD
+
+**Layer**: 
 - YOLOv8 layers [15, 18, 21] → YOLOv11 layers [16, 19, 22]
 - Targets P3, P4, P5 multi-scale features (small, medium, large objects)
-**Loss Function**: $$\text{Standard YOLO Loss} + \alpha \times \text{L2(student features, teacher feataures)}$$
 
-### Response-based Distillation
+**Loss**: <img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{YOLO}+\alpha\lVert F_s-F_t\rVert_2^2" />
 
-- **Distillation Target**: Detection head outputs (bbox + classification logits)
-- **Loss Function**: $$ \text{Standard YOLO Loss} + \alpha \times  \text{KL divergence(student logits, teacher logits)}$$
+
+### Response-based KD
+
+- **Target**: Detection head classification logits
+- **Loss**: <img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{YOLO}+\alpha\,\text{KL}\!\left(\text{softmax}\!\left(\frac{z_s}{T}\right),\text{softmax}\!\left(\frac{z_t}{T}\right)\right)" />
+
 - **Strategy** : Focal weighting with confidence thresholding on teacher predictions
 
 ### Common Training Setup:
@@ -123,48 +133,101 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 - **Optimizer**: SGD with standard YOLO settings
 
 
+## Loss function details 
+
+**Base detection Loss (YOLOv8 /YOLOv11)**
+<img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{YOLO}=\mathcal{L}_{box}+\mathcal{L}_{cls}+\mathcal{L}_{dfl}" />
+
+**Combined training objective with KD**
+<img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{total}=\mathcal{L}_{YOLO}+\alpha\,\mathcal{L}_{KD}" />
+
+
+### Response based KD loss 
+The objective is to transfer class probabilities structure from the teacher detection head to the student 
+
+<img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{KD}^{resp}=\frac{1}{L}\sum_{l=1}^{L}\text{KL}\!\left(\text{softmax}\!\left(\frac{z_s^l}{T}\right),\text{softmax}\!\left(\frac{z_t^l}{T}\right)\right)\cdot w_{focal}" />
+
+where: 
+
+- <img src="https://latex.codecogs.com/svg.image?z_s,\;z_t" /> : student and teacher classification logits  
+- <img src="https://latex.codecogs.com/svg.image?T" /> : temperature scaling  
+- <img src="https://latex.codecogs.com/svg.image?L" /> : number of detection head layers  
+- <img src="https://latex.codecogs.com/svg.image?w_{focal}" /> : confidence-aware weighting  
+
+
+
+ Distillation is applied only when the teacher is confident :   
+<img src="https://latex.codecogs.com/svg.image?p_t=\max\left(\text{softmax}(z_t)\right)" />  
+
+Focal Weighting means each location is reweighted:  <img src="https://latex.codecogs.com/svg.image?w_{focal}=(1-p_t)^{\gamma}" />
+
+
+### Feature based KD loss 
+The objective is to encourage intermediate representation similarity between teacher and student 
+
+<img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{KD}^{feat}=\frac{1}{K}\sum_{k=1}^{K}\lVert F_s^{k}-F_t^{k}\rVert_2^2" />
+
+where: 
+
+- <img src="https://latex.codecogs.com/svg.image?F_s^{k},\;F_t^{k}" /> : student and teacher feature maps at level <img src="https://latex.codecogs.com/svg.image?k" />  
+- <img src="https://latex.codecogs.com/svg.image?K" /> : number of feature levels (P3, P4, P5)  
+
+
+
 ### Standard metrics
 | Model     | mAp   | mAp50 | mAp75 | Precision  | Recall | 
 |-----------|-------|-------|-------|------------|--------|
 | YOLOv8n  - Pre trained (Teacher) | 37.14% | 52.11% | 40.39% | 63.41%      | 47.43%
 | YOLOv11n - Feature KD from YOLOv8n | 36.53%| 51.36% | 39.37%| 63.17%     | 47.01%
 | YOLOv11n - Response KD from YOLOv8n | 36.64% | 51.53% | 39.69% | 63.63%      | 47.17%
-| YOLOv11n - Pre trained | 39.25% | 54.86% | 42.73% | 65.29%      | 50.43%
+| YOLOv11n - Pre trained | **39.25%** | **54.86%** | **42.73%** | **65.29%**      | **50.43%**
 
-### Negative Flip Analysis Results
+### Negative Flip Results (KS vs NO-KD)
 Comparison: YOLOv8n (Teacher/Baseline) vs YOLOv11n with Knowledge Distillation (Student)
 
-| Metric | Experiment 1 | Response-based KD | Feature-based KD |
+| Metric | Experiment 1 | Response KD | Feature KD |
 |------|------------------|------------------|------------------|
-| **LNF Rate** | 2.30%| 8.06% | 7.88% |
+| **LNF Rate** | 2.30%| **8.06% | 7.88% |
 | **CNF Rate** |0.40%  | 0.49% | 0.54% |
 | **TNF Rate** | 2.46% | 8.29% | 8.12% |
 | **Flip Difference** | -2.14% | -7.84% | -7.63% |
 | **Dominant Error Type** | Localizatio | Localization | Localization |
 
+
+| KD increases localization negative flips by ~55% compared to the non-KD baseline, while classification consistency remains largely unchanged.
+
 ### Key Statistics Comparison
 
-| Statistic | Experiment 1|  Response-based KD | Feature-based KD |
+| Statistic | Experiment 1|  Response KD | Feature KD |
 |---------|------------------|------------------|------------------|
 | **Total Objects** | 36,335  | 36,335 | 36,335 |
 | **Objects Detected by Both Models** |17,474 (48.1%) | 16,399 (45.12%) | 16,464 (45.2%) |
-| **Location Negative Flips** |1,853 | 2,928 | 2,863 |
+| **Location Negative Flips** |1,853 | **2,928** | **2,863** |
 | **Classification Negative Flips**| 92 | 81 | 89 |
+
+| KD reduces overlap between teacher and student detections, indicating degraded spatial generalization rather than semantic confusion.
+
+
+
 
 
 # 📍  Conlusion 
 ## 1.Training Data Impact vs Universal Performance
 
 The analysis reveals that maintaining the same architecture (YOLOv11n) while increasing training data from half to the complete COCO dataset significantly improves standard metrics performance. 
-However, we can observe a considerable number of localization negative flips (836 objects, 2.3%), meaning the model trained with less data detects objects that the model trained with more data cannot find.
+However, i can observe a considerable number of localization negative flips (836 objects, 2.3%), meaning the model trained with less data detects objects that the model trained with more data cannot find.
 
 This suggests that **increasing training data does not lead to universal improvement across all objects, but rather causes the model to learn different strategies for object identification**. Different data volumes create distinct detection 
 specializations rather than purely superior performance.
 
 ## 2.Localization vs Classification Challenges
 
-From both experiments, we observe that when both models detect the same object, they almost always assign the same class (very low CNF rates). This indicates that:
+From the experiments, i observe that when both models detect the same object, they almost always assign the same class (very low CNF rates). This indicates that:
 
 - Object detection negative flips are concentrated more on localization than  classification
 - Classification performance remains consistent across different models when objects are successfully detected
 - The primary challenge in model evolution is preserving detection coverage, not improving classification accuracy
+
+## 3.Knowledge Distillation & Negative Flip Analysis
+Despite architectural advances in YOLO11n, i observe that KD from YOLOV8n does not reduce negative flips, and in fact it has increased localication failures, even though standard metrcs remain competive. 
+
