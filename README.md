@@ -108,8 +108,8 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 - **Image size**: 640×640
 - **Optimizer**: SGD with standard YOLO settings
 
-### KD types: 
-1. **Feature-based KD**
+#### Feature-based KD ####
+
 Encourages intermediate representation similarity: 
 
 $$L_{{KD}}^{{feat}} = \frac{1}{K} \sum_{k=1}^{K} \| F_s^{k} - F_t^{k} \|_2^2$$
@@ -118,7 +118,8 @@ $$L_{{KD}}^{{feat}} = \frac{1}{K} \sum_{k=1}^{K} \| F_s^{k} - F_t^{k} \|_2^2$$
 
 
 
-2. **Response-based KD**
+#### Response-based KD ####
+
 Aligns detection head class probabilities:
 
 $$
@@ -130,7 +131,14 @@ $$
 - $$z_s, z_t$$, students and teacher classification logits 
 - T: temperature scaling 
 - L: detection head layers
-- $$p_t=\max (softmax(z_t)) > threshHold$$
+
+Confidence Thresholding: Distillation is applied when the teacher is confident: 
+
+- $$p_t=\max (softmax(z_t)) > threshHold$$ 
+
+Focal Weighting
+Each location is reweighted to emphasize hard examples:
+
 - $${w}_{focal}: (1-p_t)^{\gamma}$$
 
 
@@ -156,11 +164,11 @@ Comparison: YOLOv8n (Teacher/Baseline) vs YOLOv11n with Knowledge Distillation (
 
 | Metric | Experiment 1 | Response KD | Feature KD |
 |------|------------------|------------------|------------------|
-| **LNF Rate** | 2.30%| **8.06% | 7.88% |
+| **LNF Rate** | 2.30%| 8.06% | 7.88% |
 | **CNF Rate** |0.40%  | 0.49% | 0.54% |
 | **TNF Rate** | 2.46% | 8.29% | 8.12% |
 | **Flip Difference** | -2.14% | -7.84% | -7.63% |
-| **Dominant Error Type** | Localizatio | Localization | Localization |
+| **Dominant Error Type** | Localization | Localization | Localization |
 
 
 | KD increases localization negative flips by ~55% compared to the non-KD baseline, while classification consistency remains largely unchanged.
