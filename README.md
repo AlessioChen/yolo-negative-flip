@@ -111,19 +111,16 @@ Both models are trained from scratch using the same **YOLOv11n** architecture.
 Two KD strategies were evaluated. 
 
 ### Feature-based KD
+The objective is to encourage intermediate representation similarity between teacher and student 
 
 **Layer**: 
 - YOLOv8 layers [15, 18, 21] → YOLOv11 layers [16, 19, 22]
 - Targets P3, P4, P5 multi-scale features (small, medium, large objects)
 
-**Loss**: <img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{YOLO}+\alpha\lVert F_s-F_t\rVert_2^2" />
-
-
 ### Response-based KD
+The objective is to transfer class probabilities structure from the teacher detection head to the student 
 
 - **Target**: Detection head classification logits
-- **Loss**: <img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{YOLO}+\alpha\,\text{KL}\!\left(\text{softmax}\!\left(\frac{z_s}{T}\right),\text{softmax}\!\left(\frac{z_t}{T}\right)\right)" />
-
 - **Strategy** : Focal weighting with confidence thresholding on teacher predictions
 
 ### Common Training Setup:
@@ -136,41 +133,48 @@ Two KD strategies were evaluated.
 ## Loss function details 
 
 **Base detection Loss (YOLOv8 /YOLOv11)**
-<img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{YOLO}=\mathcal{L}_{box}+\mathcal{L}_{cls}+\mathcal{L}_{dfl}" />
+
+$$L_{YOLO} = L_{box} + L_{cls} + L_{dfl}$$
 
 **Combined training objective with KD**
-<img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{total}=\mathcal{L}_{YOLO}+\alpha\,\mathcal{L}_{KD}" />
+
+$$L_{Total} = L_{YOLO} + \alpha \times L_{KD}$$
 
 
 ### Response based KD loss 
 The objective is to transfer class probabilities structure from the teacher detection head to the student 
 
-<img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{KD}^{resp}=\frac{1}{L}\sum_{l=1}^{L}\text{KL}\!\left(\text{softmax}\!\left(\frac{z_s^l}{T}\right),\text{softmax}\!\left(\frac{z_t^l}{T}\right)\right)\cdot w_{focal}" />
+$$
+L_{KD}^{resp} = \frac{1}{L} \sum_{l=1}^{L} w_{focal}^l \cdot 
+KL\Big(\text{softmax}(\frac{z_s^l}{T}), \text{softmax}(\frac{z_t^l}{T})\Big)
+$$
 
 where: 
 
-- <img src="https://latex.codecogs.com/svg.image?z_s,\;z_t" /> : student and teacher classification logits  
-- <img src="https://latex.codecogs.com/svg.image?T" /> : temperature scaling  
-- <img src="https://latex.codecogs.com/svg.image?L" /> : number of detection head layers  
-- <img src="https://latex.codecogs.com/svg.image?w_{focal}" /> : confidence-aware weighting  
+- $$z_s, z_t$$, students and teacher classification logits 
+- T: temperature scaling 
+- L: detection head layers 
+- $${w}_{focal}$$: confidence-aware weighting 
 
 
+Distillation is applied only when the teacher is confident
 
- Distillation is applied only when the teacher is confident :   
-<img src="https://latex.codecogs.com/svg.image?p_t=\max\left(\text{softmax}(z_t)\right)" />  
+$$p_t=\max (softmax(z_t)) > conf_thresh)$$
 
-Focal Weighting means each location is reweighted:  <img src="https://latex.codecogs.com/svg.image?w_{focal}=(1-p_t)^{\gamma}" />
+Focal Weighting: each location is reweighted
+
+$$w_{focal} = (1 - p_t)^{\gamma}$$
 
 
 ### Feature based KD loss 
 The objective is to encourage intermediate representation similarity between teacher and student 
 
-<img src="https://latex.codecogs.com/svg.image?\mathcal{L}_{KD}^{feat}=\frac{1}{K}\sum_{k=1}^{K}\lVert F_s^{k}-F_t^{k}\rVert_2^2" />
+$$L_{{KD}}^{{feat}} = \frac{1}{K} \sum_{k=1}^{K} \| F_s^{k} - F_t^{k} \|_2^2$$
 
 where: 
 
-- <img src="https://latex.codecogs.com/svg.image?F_s^{k},\;F_t^{k}" /> : student and teacher feature maps at level <img src="https://latex.codecogs.com/svg.image?k" />  
-- <img src="https://latex.codecogs.com/svg.image?K" /> : number of feature levels (P3, P4, P5)  
+- $$F_s^{k} - F_{t}^{k}$$: student and teacher feature maps 
+- $$K$$: P3,P4,P3 feature levels 
 
 
 
