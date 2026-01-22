@@ -4,7 +4,7 @@ from ultralytics.utils.downloads import download
 
 # Download labels
 segments = True  # segment or box labels
-dir = Path("../datasets")  # dataset root dir
+dir = Path("../datasets_original")  # dataset root dir
 url = "https://github.com/ultralytics/assets/releases/download/v0.0.0/"
 urls = [
     url + ("coco2017labels-segments.zip" if segments else "coco2017labels.zip")

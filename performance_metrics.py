@@ -2,6 +2,7 @@ from ultralytics import YOLO
 import os
 import yaml
 import tempfile
+from src.distillation.distill import KD_Model
 
 
 def evaluate_model_performance(model, val_images_path, annotations_path):
@@ -163,7 +164,7 @@ def create_coco_dataset_config(val_images_path, annotations_path):
 
 
 if __name__ == "__main__":
-    with open("config.yml", "r") as f:
+    with open("src/analysis/config.yml", "r") as f:
         config = yaml.safe_load(f)
 
     model_pretrained_path = config["models"]["pretrained"]

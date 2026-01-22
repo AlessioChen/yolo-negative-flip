@@ -1,6 +1,6 @@
 from typing import Dict, List
-from ..utils.iou import compute_iou
-from ..models.detector import get_ground_truth_objects
+from src.utils.iou import compute_iou
+from src.models.detector import get_ground_truth_objects
 from pycocotools.coco import COCO
 
 
