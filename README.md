@@ -164,10 +164,10 @@ Comparison: YOLOv8n (Teacher/Baseline) vs YOLOv11n with Knowledge Distillation (
 
 | Metric | Experiment 1 | Response KD | Feature KD |
 |------|------------------|------------------|------------------|
-| **LNF Rate** | 2.30%| 8.06% | 7.88% |
-| **CNF Rate** |0.40%  | 0.49% | 0.54% |
-| **TNF Rate** | 2.46% | 8.29% | 8.12% |
-| **Flip Difference** | -2.14% | -7.84% | -7.63% |
+| **LNF Rate** | 5.10%| 8.06% | 7.88% |
+| **CNF Rate** |0.53%  | 0.49% | 0.54% |
+| **TNF Rate** | 5.36% | 8.29% | 8.12% |
+| **Flip Difference** | -4.85% | -7.84% | -7.63% |
 | **Dominant Error Type** | Localization | Localization | Localization |
 
 
